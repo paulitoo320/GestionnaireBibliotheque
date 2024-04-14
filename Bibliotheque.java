@@ -10,11 +10,14 @@ public class Bibliotheque {
     private static final int MAX_EMPRUNTS_AUTORISES = 5;
     private static ArrayList<Livre> listeLivres;
     private static HashMap<Utilisateur, ArrayList<Livre>> empruntsUtilisateurs;
+    private HashMap<Integer, Compte> comptesUtilisateurs;
+
 
 
     public Bibliotheque() {
         this.listeLivres = new ArrayList<>();
         this.empruntsUtilisateurs = new HashMap<>();
+        this.comptesUtilisateurs = new HashMap<>(); // Initialisez ici la HashMap pour les comptes
     }
 
     public void ajouterLivre(Livre livre) {
@@ -36,12 +39,29 @@ public class Bibliotheque {
                 .findFirst()
                 .orElseThrow(() -> new LibraryException("Livre non trouvé avec l'ISBN: " + ISBN));
 
+        if (livre instanceof Roman && livreModifie instanceof Roman) {
+            Roman romanOriginal = (Roman) livre;
+            Roman romanModifie = (Roman) livreModifie;
+            romanOriginal.setGenre(romanModifie.getGenre()); // Mettre à jour le genre si c'est un roman
+        } else if (livre instanceof Essai && livreModifie instanceof Essai) {
+            Essai essaiOriginal = (Essai) livre;
+            Essai essaiModifie = (Essai) livreModifie;
+            essaiOriginal.setSujet(essaiModifie.getSujet()); // Mettre à jour le sujet si c'est un essai
+        } else if (livre instanceof LivreAudio && livreModifie instanceof LivreAudio) {
+            LivreAudio livreAudioOriginal = (LivreAudio) livre;
+            LivreAudio livreAudioModifie = (LivreAudio) livreModifie;
+            livreAudioOriginal.setNarrateur(livreAudioModifie.getNarrateur()); // Mettre à jour le narrateur
+            livreAudioOriginal.setDuree(livreAudioModifie.getDuree()); // Mettre à jour la durée
+        }
+
         livre.setTitre(livreModifie.getTitre());
         livre.setAuteur(livreModifie.getAuteur());
         livre.setAnneePublication(livreModifie.getAnneePublication());
         livre.setISBN(livreModifie.getISBN());
+
         System.out.println("Le livre a été modifié avec succès: " + livre);
     }
+
 
     public void supprimerLivre(String ISBN) throws LibraryException {
         boolean isRemoved = listeLivres.removeIf(livre -> livre.getISBN().equals(ISBN));
@@ -103,12 +123,14 @@ public class Bibliotheque {
     }
 
 
-    public void enregistrerRetour(Livre livre) {
-        empruntsUtilisateurs.forEach((utilisateur, livresEmpruntes) -> {
-            if(livresEmpruntes.remove(livre)) {
-                System.out.println(utilisateur.getNom() + " a retourné le livre: " + livre.getTitre());
-            }
-        });
+    public void enregistrerRetour(Utilisateur utilisateur, Livre livre) throws LibraryException {
+        ArrayList<Livre> livresEmpruntes = empruntsUtilisateurs.get(utilisateur);
+        if (livresEmpruntes != null && livresEmpruntes.contains(livre)) {
+            livresEmpruntes.remove(livre);
+            System.out.println(utilisateur.getNom() + " a retourné le livre: " + livre.getTitre());
+        } else {
+            throw new LibraryException("Le livre n'a pas été emprunté par cet utilisateur.");
+        }
     }
 
     public ArrayList<Livre> getEmpruntsUtilisateur(Utilisateur utilisateur) {
@@ -132,14 +154,14 @@ public class Bibliotheque {
         }
     }
 
-    public void ajouterUtilisateur(Utilisateur utilisateur) {
-        if (empruntsUtilisateurs.containsKey(utilisateur)) {
-            throw new RuntimeException("Un utilisateur avec ce numéro d'identification existe déjà.");
-        } else {
+    public void ajouterUtilisateur(Utilisateur utilisateur, String nomUtilisateur, String motDePasse, Role role) {
+        if (!empruntsUtilisateurs.containsKey(utilisateur)) {
             empruntsUtilisateurs.put(utilisateur, new ArrayList<>());
+            comptesUtilisateurs.put(utilisateur.getNumeroIdentification(), new Compte(nomUtilisateur, motDePasse, role, utilisateur));
+        } else {
+            throw new RuntimeException("Un utilisateur avec ce numéro d'identification existe déjà.");
         }
     }
-
 
     public boolean peutEmprunter(Utilisateur utilisateur) {
         ArrayList<Livre> livresEmpruntes = empruntsUtilisateurs.get(utilisateur);
@@ -149,26 +171,35 @@ public class Bibliotheque {
     public void afficherTousLesUtilisateurs() {
         for (Utilisateur utilisateur : empruntsUtilisateurs.keySet()) {
             System.out.println(utilisateur);
-        }
-    }
-
-    public void modifierInformationsUtilisateur(int numeroIdentification, String nouveauNom, boolean aJourCotisations) {
-        Utilisateur utilisateur = null;
-        for (Utilisateur u : empruntsUtilisateurs.keySet()) {
-            if (u.getNumeroIdentification() == numeroIdentification) {
-                utilisateur = u;
-                break;
+            Compte compteAssocie = comptesUtilisateurs.get(utilisateur.getNumeroIdentification());
+            if (compteAssocie != null) {
+                System.out.println("Nom d'utilisateur: " + compteAssocie.getNomUtilisateur());
+                System.out.println("Mot de passe: " + compteAssocie.getMotDePasse());
             }
         }
-        if (utilisateur != null) {
-            utilisateur.setNom(nouveauNom);
-            utilisateur.setAJourCotisations(aJourCotisations);
-        } else {
-            throw new RuntimeException("Utilisateur avec le numéro d'identification "
-                    + numeroIdentification + " non trouvé.");
-        }
     }
 
+
+    public void modifierInformationsUtilisateur(int numeroIdentification, String nouveauNom,
+                                                boolean aJourCotisations, String nomUtilisateur,
+                                                String motDePasse) throws LibraryException {
+        Utilisateur utilisateur = trouverUtilisateurParNumeroIdentification(numeroIdentification);
+        Compte compte = comptesUtilisateurs.get(numeroIdentification);
+
+        if (utilisateur == null || compte == null) {
+            throw new LibraryException("Utilisateur ou compte non trouvé.");
+        }
+
+        // Mettre à jour les informations de l'utilisateur
+        utilisateur.setNom(nouveauNom);
+        utilisateur.setAJourCotisations(aJourCotisations);
+
+        // Mettre à jour les informations de compte
+        compte.setNomUtilisateur(nomUtilisateur);
+        compte.setMotDePasse(motDePasse);
+
+        System.out.println("Les informations de l'utilisateur et du compte ont été mises à jour avec succès.");
+    }
 
     public Utilisateur trouverUtilisateurParNumeroIdentification(int numeroIdentification) {
         for (Utilisateur utilisateur : empruntsUtilisateurs.keySet()) {
@@ -176,8 +207,21 @@ public class Bibliotheque {
                 return utilisateur;
             }
         }
-        return null; // Aucun utilisateur avec ce numéro d'identification
+        return null; // Aucun utilisateur trouvé avec ce numéro d'identification
     }
+
+
+    public Utilisateur getUtilisateurParNumeroIdentification(int numeroIdentification, String nomUtilisateur, String motDePasse) {
+        Utilisateur utilisateurTrouve = null;
+        Compte compteAssocie = comptesUtilisateurs.get(numeroIdentification);
+
+        if (compteAssocie != null && compteAssocie.getNomUtilisateur().equals(nomUtilisateur) && compteAssocie.verifierMotDePasse(motDePasse)) {
+            utilisateurTrouve = trouverUtilisateurParNumeroIdentification(numeroIdentification);
+        }
+
+        return utilisateurTrouve; // Retourne null si aucune correspondance n'est trouvée
+    }
+
 
     public void supprimerUtilisateur(int numeroIdentification) {
         Utilisateur utilisateurASupprimer = null;

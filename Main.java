@@ -2,42 +2,39 @@ import java.util.*;
 
 public class Main {
     private static final Bibliotheque bibliotheque = new Bibliotheque();
-    private static final Map<String, Utilisateur> comptesUtilisateurs = new HashMap<>();
-
-    static {
-        // Initialiser les utilisateurs ici pour la démonstration
-        comptesUtilisateurs.put("alice", new Utilisateur("Alice", 1, true));
-        comptesUtilisateurs.put("bob", new Utilisateur("Bob", 2, true));
-        // ... autres utilisateurs ...
-    }
+    private static final HashMap<Integer, Compte> comptesUtilisateurs = new HashMap<>();
     private static final Scanner scanner = new Scanner(System.in);
     // Stocker les comptes dans une Map pour faciliter la recherche par nom d'utilisateur
     private static final Map<String, Compte> comptes = new HashMap<>();
 
     public static void main(String[] args) throws LibraryException {
-        // Initialiser les comptes
-        comptes.put("admin", new Compte("admin", "admin123", Role.ADMINISTRATEUR));
-        // Simuler quelques comptes utilisateurs
-        comptes.put("user1", new Compte("user1", "user123", Role.UTILISATEUR));
-        comptes.put("user2", new Compte("user2", "user123", Role.UTILISATEUR));
+        // Initialiser le compte administrateur
+        comptes.put("admin", new Compte("admin", "admin123", Role.ADMINISTRATEUR, new Utilisateur("admin", 1, true)));
+        System.out.println("Bienvenue à la Bibliothèque");
 
-        System.out.println("Nom d'utilisateur:");
-        String nomUtilisateur = scanner.nextLine();
-        System.out.println("Mot de passe:");
-        String motDePasse = scanner.nextLine();
+        while (true) {
+            System.out.print("Nom d'utilisateur: ");
+            String nomUtilisateur = scanner.nextLine();
+            System.out.print("Mot de passe: ");
+            String motDePasse = scanner.nextLine();
 
-        Compte compte = comptes.get(nomUtilisateur);
-        if (compte != null && compte.verifierIdentifiants(nomUtilisateur, motDePasse)) {
-            switch (compte.getRole()) {
-                case ADMINISTRATEUR:
-                    afficherMenuAdmin();
+            Compte compte = comptes.get(nomUtilisateur);
+            if (compte != null && compte.verifierMotDePasse(motDePasse)) {
+                switch (compte.getRole()) {
+                    case ADMINISTRATEUR:
+                        afficherMenuAdmin();
+                        break;
+                    case UTILISATEUR:
+                        afficherMenuUtilisateur(compte);
+                        break;
+                }
+            } else {
+                System.out.println("Identifiants incorrects. Essayez encore ou tapez 'quitter' pour sortir.");
+                if ("quitter".equalsIgnoreCase(scanner.nextLine())) {
+                    System.out.println("Merci d'avoir utilisé la Bibliothèque. À bientôt !");
                     break;
-                case UTILISATEUR:
-                    afficherMenuUtilisateur(compte);
-                    break;
+                }
             }
-        } else {
-            System.out.println("Identifiants incorrects.");
         }
     }
 
@@ -170,6 +167,14 @@ public class Main {
         System.out.println("Modifier un livre existant:");
         System.out.print("Entrez l'ISBN du livre à modifier: ");
         String ISBN = scanner.nextLine();
+
+        // Trouver le livre par ISBN
+        Livre livre = bibliotheque.getLivre(ISBN);
+        if (livre == null) {
+            System.out.println("Aucun livre trouvé avec l'ISBN fourni.");
+            return;
+        }
+
         System.out.println("Entrez les nouvelles informations du livre:");
         System.out.print("Nouveau titre: ");
         String titre = scanner.nextLine();
@@ -178,14 +183,36 @@ public class Main {
         System.out.print("Nouvelle année de publication: ");
         int anneePublication = Integer.parseInt(scanner.nextLine());
 
-        Livre livreModifie = new Livre(titre, auteur, anneePublication, ISBN);
+        if (livre instanceof Roman) {
+            // Si le livre est un roman, peut-être voudrions-nous modifier le genre du roman
+            System.out.print("Nouveau genre du roman: ");
+            String genreRoman = scanner.nextLine();
+            livre = new Roman(titre, auteur, anneePublication, ISBN, genreRoman);
+        } else if (livre instanceof Essai) {
+            // Si le livre est un essai, peut-être voudrions-nous modifier le sujet de l'essai
+            System.out.print("Nouveau sujet de l'essai: ");
+            String sujet = scanner.nextLine();
+            livre = new Essai(titre, auteur, anneePublication, ISBN, sujet);
+        } else if (livre instanceof LivreAudio) {
+            // Si c'est un livre audio, on pourra modifier le narrateur ou la durée
+            System.out.print("Nouveau narrateur: ");
+            String narrateur = scanner.nextLine();
+            System.out.print("Nouvelle durée en minutes: ");
+            int duree = Integer.parseInt(scanner.nextLine());
+            livre = new LivreAudio(titre, auteur, anneePublication, ISBN, duree, narrateur);
+        } else {
+            // Si le livre n'est d'aucun type spécial, on crée simplement un nouveau Livre
+            livre = new Livre(titre, auteur, anneePublication, ISBN);
+        }
+
         try {
-            bibliotheque.modifierLivre(ISBN, livreModifie);
+            bibliotheque.modifierLivre(ISBN, livre);
             System.out.println("Le livre a été modifié avec succès.");
         } catch (LibraryException e) {
             System.out.println(e.getMessage());
         }
     }
+
 
     private static void supprimerLivre() {
         System.out.println("Supprimer un livre de la bibliothèque:");
@@ -292,14 +319,26 @@ public class Main {
         String ISBN = scanner.nextLine();
 
         Livre livre = bibliotheque.getLivre(ISBN);
-
         if (livre != null) {
-            bibliotheque.enregistrerRetour(livre);
-            System.out.println("Retour enregistré avec succès.");
+            System.out.print("Entrez le numéro d'identification de l'utilisateur qui retourne le livre: ");
+            int numeroIdentification = Integer.parseInt(scanner.nextLine());
+
+            Utilisateur utilisateur = bibliotheque.trouverUtilisateurParNumeroIdentification(numeroIdentification);
+            if (utilisateur != null) {
+                try {
+                    bibliotheque.enregistrerRetour(utilisateur, livre);
+                    System.out.println("Retour enregistré avec succès pour " + utilisateur.getNom() + ".");
+                } catch (LibraryException e) {
+                    System.out.println(e.getMessage());
+                }
+            } else {
+                System.out.println("Aucun utilisateur trouvé avec ce numéro d'identification.");
+            }
         } else {
             System.out.println("Aucun livre correspondant à cet ISBN n'a été trouvé.");
         }
     }
+
 
     private static void afficherEmpruntsUtilisateur() {
         System.out.println("Afficher les emprunts d'un utilisateur:");
@@ -366,6 +405,7 @@ public class Main {
     }
 
     private static void enregistrerNouvelUtilisateur() {
+        // Demander les informations de base de l'utilisateur
         System.out.print("Entrez le nom du nouvel utilisateur: ");
         String nom = scanner.nextLine();
         System.out.print("Entrez le numéro d'identification: ");
@@ -373,15 +413,28 @@ public class Main {
         System.out.print("L'utilisateur a-t-il payé ses cotisations ? (oui/non): ");
         boolean aJourCotisations = scanner.nextLine().trim().equalsIgnoreCase("oui");
 
+        // Demander le nom d'utilisateur et le mot de passe pour le compte
+        System.out.print("Choisissez un nom d'utilisateur: ");
+        String nomUtilisateur = scanner.nextLine();
+        System.out.print("Choisissez un mot de passe: ");
+        String motDePasse = scanner.nextLine();
+
+        // Créer les objets Utilisateur et Compte
         Utilisateur nouvelUtilisateur = new Utilisateur(nom, numeroIdentification, aJourCotisations);
+        Compte nouveauCompte = new Compte(nomUtilisateur, motDePasse, Role.UTILISATEUR, nouvelUtilisateur);
+
+        // Ajouter l'utilisateur dans la HashMap des utilisateurs de la bibliothèque
         try {
-            bibliotheque.ajouterUtilisateur(nouvelUtilisateur);
-            System.out.println("Utilisateur enregistré avec succès.");
+            bibliotheque.ajouterUtilisateur(nouvelUtilisateur, nouveauCompte.getNomUtilisateur(), nouveauCompte.getMotDePasse(), nouveauCompte.getRole());
+
+            comptesUtilisateurs.put(numeroIdentification, nouveauCompte);
+            comptes.put(nouveauCompte.getNomUtilisateur(), nouveauCompte);
+
+            System.out.println("Utilisateur et compte enregistrés avec succès.");
         } catch (RuntimeException e) {
             System.out.println(e.getMessage());
         }
     }
-
 
     private static void verifierEligibiliteUtilisateurs() {
         System.out.print("Entrez le numéro d'identification de l'utilisateur à vérifier : ");
@@ -407,39 +460,63 @@ public class Main {
         System.out.print("Entrez le numéro d'identification de l'utilisateur à modifier: ");
         int numeroIdentification = Integer.parseInt(scanner.nextLine());
 
+        // Trouver l'utilisateur par son numéro d'identification
         Utilisateur utilisateur = bibliotheque.trouverUtilisateurParNumeroIdentification(numeroIdentification);
+        // Trouver le compte associé à l'utilisateur dans comptesUtilisateurs
+        Compte compteAssocie = comptesUtilisateurs.get(numeroIdentification);
 
-        if (utilisateur != null) {
+        if (utilisateur != null && compteAssocie != null) {
             System.out.print("Entrez le nouveau nom de l'utilisateur: ");
             String nouveauNom = scanner.nextLine();
+
+            System.out.print("Entrez le nouveau nom d'utilisateur (laissez vide pour ne pas changer): ");
+            String nouveauNomUtilisateur = scanner.nextLine();
+
+            System.out.print("Entrez le nouveau mot de passe (laissez vide pour ne pas changer): ");
+            String nouveauMotDePasse = scanner.nextLine();
 
             System.out.print("L'utilisateur est-il à jour avec ses cotisations? (oui/non): ");
             boolean estAJour = scanner.nextLine().trim().equalsIgnoreCase("oui");
 
             try {
-                bibliotheque.modifierInformationsUtilisateur(utilisateur.getNumeroIdentification(), nouveauNom, estAJour);
-                System.out.println("Les informations de l'utilisateur ont été mises à jour avec succès.");
+                // Mettre à jour les informations de l'utilisateur
+                utilisateur.setNom(nouveauNom);
+                utilisateur.setAJourCotisations(estAJour);
+
+                // Si le nom d'utilisateur ou le mot de passe est changé, mettre à jour le compte
+                if (!nouveauNomUtilisateur.isEmpty() || !nouveauMotDePasse.isEmpty()) {
+                    if (!nouveauNomUtilisateur.isEmpty()) {
+                        comptes.remove(compteAssocie.getNomUtilisateur()); // Supprimer l'ancienne entrée
+                        compteAssocie.setNomUtilisateur(nouveauNomUtilisateur);
+                    }
+                    if (!nouveauMotDePasse.isEmpty()) {
+                        compteAssocie.setMotDePasse(nouveauMotDePasse);
+                    }
+                    comptes.put(compteAssocie.getNomUtilisateur(), compteAssocie); // Ajouter la nouvelle entrée
+                    comptesUtilisateurs.put(numeroIdentification, compteAssocie); // Mettre à jour comptesUtilisateurs avec le compte modifié
+                }
+
+                System.out.println("Les informations de l'utilisateur et du compte ont été mises à jour avec succès.");
             } catch (Exception e) {
                 System.out.println("Une erreur est survenue lors de la mise à jour: " + e.getMessage());
             }
         } else {
-            System.out.println("Utilisateur non trouvé avec ce numéro d'identification.");
+            System.out.println("Utilisateur ou compte non trouvé avec ce numéro d'identification.");
         }
     }
-
-
-
-
 
     private static void rechercherUtilisateurParNumeroIdentification() {
         System.out.print("Entrez le numéro d'identification de l'utilisateur à rechercher : ");
         int numeroIdentification = Integer.parseInt(scanner.nextLine());
 
         Utilisateur utilisateur = bibliotheque.trouverUtilisateurParNumeroIdentification(numeroIdentification);
+        Compte compteAssocie = comptesUtilisateurs.get(numeroIdentification); // Récupération du compte associé
 
-        if (utilisateur != null) {
+        if (utilisateur != null && compteAssocie != null) {
             System.out.println("Informations sur l'utilisateur: " + utilisateur);
-            // Afficher aussi les livres empruntés si nécessaire
+            System.out.println("Nom d'utilisateur associé: " + compteAssocie.getNomUtilisateur());
+            System.out.println("Mot de passe associé: " + compteAssocie.getMotDePasse());
+            // Afficher les livres empruntés si nécessaire
             ArrayList<Livre> livresEmpruntes = bibliotheque.getEmpruntsUtilisateur(utilisateur);
             if (!livresEmpruntes.isEmpty()) {
                 System.out.println("Livres empruntés par " + utilisateur.getNom() + " :");
@@ -451,7 +528,6 @@ public class Main {
             System.out.println("Aucun utilisateur trouvé avec ce numéro d'identification.");
         }
     }
-
 
 
     private static void supprimerUtilisateur() {
@@ -481,13 +557,13 @@ public class Main {
 
             switch (choix) {
                 case 1:
-                    // Logique pour emprunter un livre
+                    emprunterLivreUtilisateur(compte);
                     break;
                 case 2:
-                    // Logique pour retourner un livre
+                    retournerLivreUtilisateur(compte);
                     break;
                 case 3:
-                    // Afficher les livres empruntés (nécessiterait une liaison entre Compte et Utilisateur)
+                    afficherLivresEmpruntesUtilisateur(compte);
                     break;
                 case 4:
                     continuer = false;
@@ -495,9 +571,71 @@ public class Main {
                     break;
                 default:
                     System.out.println("Option invalide, veuillez réessayer.");
+                    break;
             }
+
         }
     }
 
-    // Méthodes pour gérer les actions de chaque option...
+    private static void emprunterLivreUtilisateur(Compte compte) {
+        System.out.println("Veuillez entrer l'ISBN du livre que vous souhaitez emprunter :");
+        String isbn = scanner.nextLine();
+
+        Livre livre = bibliotheque.getLivre(isbn);
+        if (livre != null) {
+            Utilisateur utilisateur = compte.getUtilisateur();
+            try {
+                bibliotheque.enregistrerEmprunt(utilisateur, livre);
+                utilisateur.ajouterEmprunt(livre); // Garde une trace des livres empruntés par l'utilisateur
+                System.out.println("Le livre a été emprunté avec succès.");
+            } catch (LibraryException e) {
+                System.out.println(e.getMessage());
+            }
+        } else {
+            System.out.println("Le livre n'a pas été trouvé.");
+        }
+    }
+
+    private static void retournerLivreUtilisateur(Compte compte) {
+        System.out.print("Veuillez entrer l'ISBN du livre que vous souhaitez retourner : ");
+        String isbn = scanner.nextLine();
+
+        Livre livre = bibliotheque.getLivre(isbn);
+        if (livre != null) {
+            Utilisateur utilisateur = compte.getUtilisateur(); // Récupérer l'utilisateur à partir du compte
+
+            try {
+                bibliotheque.enregistrerRetour(utilisateur, livre); // Enregistrer le retour dans la bibliothèque
+                utilisateur.retournerLivre(livre); // Mettre à jour la liste des livres empruntés de l'utilisateur
+                System.out.println("Le livre a été retourné avec succès.");
+            } catch (LibraryException e) {
+                System.out.println(e.getMessage());
+            }
+        } else {
+            System.out.println("Le livre n'a pas été trouvé.");
+        }
+    }
+
+    private static void afficherLivresEmpruntesUtilisateur(Compte compte) {
+        // On suppose que chaque compte a un numéro d'identification d'utilisateur associé.
+        // Cette association devra être établie lors de la création de l'utilisateur et de son compte.
+        Utilisateur utilisateur = bibliotheque.trouverUtilisateurParNumeroIdentification(compte.getNumeroUtilisateur());
+
+        if (utilisateur != null) {
+            ArrayList<Livre> livresEmpruntes = bibliotheque.getEmpruntsUtilisateur(utilisateur);
+
+            System.out.println("Affichage des livres empruntés pour l'utilisateur: " + utilisateur.getNom());
+            if (livresEmpruntes.isEmpty()) {
+                System.out.println("Aucun livre emprunté pour le moment.");
+            } else {
+                for (Livre livre : livresEmpruntes) {
+                    System.out.println("- " + livre);
+                }
+            }
+        } else {
+            System.out.println("Aucun utilisateur associé à ce compte ou utilisateur non trouvé.");
+        }
+    }
+
+
 }
